@@ -1,0 +1,174 @@
+name: Build
+on:
+  workflow_dispatch:
+    inputs:
+      require_apple_signing:
+        description: Require Apple signing even when the version policy is unsigned
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
+      release_tag: ${{ steps.source.outputs.release_tag }}
+      apple_signing: ${{ steps.signing_policy.outputs.apple_signing }}
+    steps:
+      - name: Require manual publication from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Build must be run on main." >&2
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned workflow validator dependency
+        run: python -m pip install -r tooling/requirements-workflow.txt
+      - name: Validate canonical workflow contract before building
+        run: python scripts/workflow_contract.py
+      - name: Validate immutable source version, main ancestry and release availability before builds
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/release_source.py --repository "$GITHUB_REPOSITORY" preflight
+      - name: Require initialized matching repository, version and explicit 4D opt-in
+        env:
+          FOURD_ENABLED: ${{ vars.FOURD_ENABLED }}
+          RELEASE_TAG: ${{ steps.source.outputs.release_tag }}
+        run: python scripts/ci_config.py validate --release --tag "$RELEASE_TAG"
+      - name: Resolve version signing policy without accessing secrets
+        id: signing_policy
+        env:
+          REQUIRE_APPLE_SIGNING: ${{ inputs.require_apple_signing }}
+        shell: python
+        run: |
+          import os, subprocess, sys
+          arguments = [sys.executable, "scripts/sign_release.py", "policy", "--root", "."]
+          if os.environ["REQUIRE_APPLE_SIGNING"] == "true":
+              arguments.append("--require-apple-signing")
+          subprocess.run(arguments, check=True)
+
+  native:
+    needs: preflight
+    uses: ./.github/workflows/ci.yml
+    with:
+      source_sha: ${{ needs.preflight.outputs.source_sha }}
+      release_call: true
+
+  compile:
+    needs: [preflight, native]
+    runs-on: macos-15
+    env:
+      FOURD_ENABLED: ${{ vars.FOURD_ENABLED }}
+      TOOL4D_URL: ${{ vars.TOOL4D_URL }}
+      TOOL4D_SHA256: ${{ vars.TOOL4D_SHA256 }}
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.source_sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/ci_config.py validate --release --tag "$RELEASE_TAG"
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-macos-x64
+          path: build/macos-x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-macos-arm64
+          path: build/macos-arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-windows-x64
+          path: build/windows-x64
+      - name: Download SHA-256-verified tool4D
+        run: python scripts/ci_config.py download-tool4d
+      - name: Build and accept unsigned component without Apple secrets
+        if: needs.preflight.outputs.apple_signing == 'false'
+        run: >-
+          python scripts/accept_hosted.py --repository "$GITHUB_REPOSITORY"
+          --tool4d .tools/tool4d.app/Contents/MacOS/tool4d --tag "$RELEASE_TAG"
+      - name: Sign, notarize, staple and accept the exact final ZIP
+        if: needs.preflight.outputs.apple_signing == 'true'
+        env:
+          APPLE_DEVELOPER_ID_CERTIFICATE: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          NOTARYTOOL_APPLE_ID: ${{ secrets.NOTARYTOOL_APPLE_ID }}
+          NOTARYTOOL_TEAM_ID: ${{ secrets.NOTARYTOOL_TEAM_ID }}
+          NOTARYTOOL_PASSWORD: ${{ secrets.NOTARYTOOL_PASSWORD }}
+          CODESIGN_APPLE_ID: ${{ secrets.CODESIGN_APPLE_ID }}
+        run: >-
+          python scripts/accept_hosted.py --repository "$GITHUB_REPOSITORY"
+          --tool4d .tools/tool4d.app/Contents/MacOS/tool4d --tag "$RELEASE_TAG"
+          --require-apple-signing
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compiled-release
+          path: |
+            dist/*.zip
+            dist/*.dmg
+            dist/*-signing.json
+            dist/*.acceptance.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Retain source, compiler and final-host diagnostics even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-acceptance-diagnostics
+          path: |
+            build/hosted-acceptance.json
+            build/source-host-status.json
+            build/compile-status.json
+            build/unsigned-compiled-host-status.json
+            build/compiled-host-status.json
+            build/host-status.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  publish:
+    needs: [preflight, compile]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.source_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiled-release
+          path: dist
+      - name: Create the tag and release only after final asset validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          RELEASE_SHA: ${{ needs.preflight.outputs.source_sha }}
+          APPLE_SIGNING: ${{ needs.preflight.outputs.apple_signing }}
+        run: |
+          signing=()
+          if [ "$APPLE_SIGNING" = "true" ]; then signing+=(--require-apple-signing); fi
+          python scripts/release_assets.py --repository "$GH_REPO" --tag "$RELEASE_TAG" \
+            --sha "$RELEASE_SHA" "${signing[@]}" --create-tag --publish
