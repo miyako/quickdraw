@@ -66,7 +66,11 @@ def doctor(root=ROOT, tool4d=None):
     candidate = Path(tool4d) if tool4d else Path(root) / ".tools/tool4d.app/Contents/MacOS/tool4d"
     check("tool4d", candidate.is_file() and os.access(candidate, os.X_OK), str(candidate))
     if platform.system() == "Darwin":
-        check("lipo", shutil.which("lipo") is not None, "required for universal resource assembly")
+        if external:
+            for tool in ("codesign", "otool"):
+                check(tool, shutil.which(tool) is not None, "verify unchanged upstream executable")
+        else:
+            check("lipo", shutil.which("lipo") is not None, "required for universal resource assembly")
     report["ready_for_local_acceptance"] = all(entry["status"] == "passed" for entry in report["checks"])
     return report
 
