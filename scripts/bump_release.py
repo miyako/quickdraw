@@ -116,6 +116,23 @@ def plan(root, version, repository=None):
     for relative in ("template.json", "package.json"):
         metadata(relative)
 
+    if config.get("cli_source") == "external-quickdraw-v1":
+        from external_cli import configuration as asset_configuration
+        lock = asset_configuration(root)
+        contract = parse_json(read("tests/cli-contract.json"))
+        versions = [case["stdout"] for case in contract["cases"] if case["args"] == ["--version"]]
+        if versions != [{"protocol": 1, "version": lock["version"]}]:
+            raise ValueError("inconsistent CLI version contract for independently pinned upstream version")
+        host = parse_json(read("tests/host/contract.json"))
+        expected = {"protocol": 1, "version": lock["version"]}
+        assertions = {item["path"]: item for section in ("feature", "execution")
+                      for item in host[section]["assertions"]}
+        if (assertions.get("/version/value", {}).get("equals") != expected
+                or parse_json(assertions.get("/version/stdout", {}).get("equals", "null")) != expected
+                or parse_json(assertions.get("/renamedExecutable", {}).get("equals", {}).get("stdout", "null")) != expected):
+            raise ValueError("inconsistent host version contract for independently pinned upstream version")
+        return config, extended_surfaces(root, config, version, updates)
+
     # These are protocol examples, not arbitrary SemVer mentions in prose, URLs,
     # dependency manifests, compiler pins, or historical release instructions.
     protocol = r'(?:"protocol"|protocol)\s*:\s*1\s*,\s*(?:"version"|version)\s*:\s*"(?P<version>[^"\r\n]*)"'
@@ -243,9 +260,16 @@ def plan(root, version, repository=None):
             raise ValueError(f"missing exact version contract assertions: {relative}")
         if contract != parse_json(before):
             save(relative, before, json.dumps(contract, indent=2, ensure_ascii=False) + "\n")
+    return config, extended_surfaces(root, config, version, updates)
+
+
+def extended_surfaces(root, config, version, updates):
+    old = config["version"]
     for surface in workflow_configuration(root)["version_surfaces"]:
         relative = surface["path"]
-        before = updates.get(relative, read(relative))
+        if config.get("cli_source") and (relative.startswith("cli/") or relative.startswith("tests/")):
+            raise ValueError("upstream CLI pins/contracts cannot be component version surfaces")
+        before = updates.get(relative, regular(root, relative).read_text(encoding="utf-8"))
         if surface["kind"] == "json-pointer":
             value = parse_json(before)
             current = value
@@ -266,8 +290,9 @@ def plan(root, version, repository=None):
             if len(matches) != surface["count"] or any(match["version"] != old for match in matches):
                 raise ValueError("inconsistent literal version surface: " + relative)
             after = re.sub(pattern, lambda match: prefix + version + suffix, before)
-        save(relative, before, after)
-    return config, updates
+        if before != after:
+            updates[str(relative)] = after
+    return updates
 
 
 def next_version(root, mode, repository=None, *, tags=None):

@@ -1,10 +1,12 @@
 {
   "schema": 1,
-  "initialized": false,
-  "repository": "4d-component-template",
-  "namespace": "TemplateCLI",
-  "cli": "component-cli",
-  "language": null,
-  "feature": "Deterministic UTF-8 greeting example",
-  "version": "0.1.0"
+  "initialized": true,
+  "repository": "quickdraw",
+  "namespace": "QuickDraw",
+  "cli": "quickdraw",
+  "language": "rust",
+  "cli_source": "external-quickdraw-v1",
+  "feature": "QuickDraw PICT conversion and inspection using verified external quickdraw-cli assets",
+  "version": "0.1.0",
+  "feature_class": "Converter"
 }

@@ -92,6 +92,9 @@ def build(root, target, language=None, cross=False):
         raise ValueError("--cross is supported only for Go on a native macOS host; use native CI for Rust/C++")
     if language is not None and language != selected:
         raise ValueError("requested language does not match template.json")
+    if config.get("cli_source") == "external-quickdraw-v1":
+        from external_cli import install
+        return install(root, target)
     source = root / "cli"
     if not source.is_dir():
         raise ValueError("initialized CLI source is missing")

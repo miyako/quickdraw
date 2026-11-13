@@ -1,207 +1,121 @@
+"""Native tests of the externally verified executable, never a second CLI build."""
+import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
-
 ROOT = Path(__file__).resolve().parents[1]
-STARTERS = ROOT / "cli-starters"
-ERROR = (
-    b'{"protocol":1,"error":{"code":"invalid_arguments","message":'
-    b'"expected greet --name <non-empty UTF-8 name> or --version"}}\n'
-)
+sys.path.insert(0, str(ROOT / "scripts"))
+from build_cli import native_target
+from make_fixtures import write_fixtures
 
 
-def json_line(value):
-    return (json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
-
-
-class ContractTests:
+class NativeContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        selected = os.environ.get("TEST_CLI_LANGUAGE")
-        if selected not in (None, "none", "go", "rust", "cpp"):
-            raise RuntimeError("TEST_CLI_LANGUAGE must be none, go, rust, or cpp")
-        if selected == "none":
-            raise unittest.SkipTest("CLI toolchains disabled by TEST_CLI_LANGUAGE=none")
-        if selected is not None and selected != cls.language:
-            raise unittest.SkipTest("TEST_CLI_LANGUAGE selects " + selected)
+        if os.environ.get("TEST_CLI_LANGUAGE") == "none":
+            raise unittest.SkipTest("native executable checks explicitly disabled")
+        target = native_target()
+        cls.executable = ROOT / "build" / target / ("quickdraw.exe" if os.name == "nt" else "quickdraw")
+        if not cls.executable.is_file():
+            raise RuntimeError("missing verified CLI; run scripts/build_cli.py --target " + target)
+        from build_provenance import verify
+        verify(ROOT, target, cls.executable)
 
-        config_path = ROOT / "template.json"
-        config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
-        initialized = config.get("initialized", False) or (ROOT / "cli").is_dir()
-        if initialized:
-            configured = config.get("language")
-            if configured not in ("go", "rust", "cpp"):
-                raise RuntimeError("initialized template.json must configure a CLI language")
-            if configured != cls.language:
-                if selected is not None:
-                    raise RuntimeError(
-                        "TEST_CLI_LANGUAGE selects " + selected
-                        + " but template.json configures " + configured
-                    )
-                raise unittest.SkipTest("initialized template selects " + configured)
-            original = ROOT / "cli"
-            executable_name = config["cli"]
-        else:
-            original = STARTERS / cls.language
-            executable_name = "component-cli"
-        if not original.is_dir():
-            raise RuntimeError("missing CLI source directory: " + str(original))
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="quickdraw 日本語 ", dir=ROOT / "build")
+        self.addCleanup(self.temp.cleanup)
+        self.folder = Path(self.temp.name)
+        write_fixtures(self.folder)
+        self.input = self.folder / "rectangle.pict"
 
-        def unavailable(message):
-            if selected is not None:
-                raise RuntimeError("selected " + cls.language + " toolchain unavailable: " + message)
-            raise unittest.SkipTest("unavailable toolchain: " + message)
+    def invoke(self, args, code=0):
+        completed = subprocess.run([str(self.executable), *map(str, args)], capture_output=True, timeout=30)
+        self.assertEqual(completed.returncode, code, completed.stderr)
+        stream = completed.stdout if code == 0 else completed.stderr
+        self.assertEqual(completed.stderr if code == 0 else completed.stdout, b"")
+        self.assertTrue(stream.endswith(b"\n"))
+        self.assertEqual(stream.count(b"\n"), 1)
+        result = json.loads(stream)
+        self.assertEqual(result["protocol"], 1)
+        return result
 
-        missing = [tool for tool in cls.tools if shutil.which(tool) is None]
-        if missing:
-            unavailable(", ".join(missing))
-        compiler = None
-        if cls.language == "cpp" and os.name != "nt":
-            compiler = next(
-                (shutil.which(tool) for tool in ("c++", "g++", "clang++") if shutil.which(tool)),
-                None,
-            )
-            if compiler is None:
-                unavailable("C++17 compiler")
-        scratch = tempfile.TemporaryDirectory(prefix=".cli-test path ", dir=Path(__file__).parent)
-        cls.addClassCleanup(scratch.cleanup)
-        root = Path(scratch.name)
-        source = root / "source"
-        shutil.copytree(original, source)
-        environment = os.environ.copy()
-        executable_name += ".exe" if os.name == "nt" else ""
-        execution_directory = root / "executables with spaces"
-        execution_directory.mkdir()
-        cls.executable = execution_directory / executable_name
-        if cls.language == "go":
-            environment.pop("GOOS", None)
-            environment.pop("GOARCH", None)
-            environment["CGO_ENABLED"] = "0"
-            environment.update(
-                GOCACHE=str(root / "go-cache"),
-                GOPATH=str(root / "go-path"),
-                GOTOOLCHAIN="local",
-                GOPROXY="off",
-                GOSUMDB="off",
-            )
-            commands = [["go", "build", "-o", str(cls.executable), "."]]
-        elif cls.language == "rust":
-            environment.pop("CARGO_BUILD_TARGET", None)
-            environment["CARGO_TARGET_DIR"] = str(root / "target")
-            built_executable = root / "target" / "release" / executable_name
-            commands = [["cargo", "build", "--release", "--offline", "--locked"]]
-        else:
-            build = root / "build"
-            built_executable = build / executable_name
-            commands = [
-                ["cmake", "-S", str(source), "-B", str(build),
-                 "-DCMAKE_BUILD_TYPE=Release",
-                 *([] if os.name == "nt" else ["-DCMAKE_CXX_COMPILER=" + compiler]),
-                 *(["-A", "x64"] if os.name == "nt" else [])],
-                ["cmake", "--build", str(build), "--config", "Release"],
-            ]
-        for command in commands:
-            result = subprocess.run(
-                command, cwd=source, env=environment, capture_output=True, timeout=180
-            )
-            if result.returncode:
-                raise RuntimeError(
-                    "build failed: " + repr(command) + "\n"
-                    + result.stdout.decode("utf-8", errors="replace")
-                    + result.stderr.decode("utf-8", errors="replace")
-                )
-        if cls.language == "cpp" and not built_executable.exists():
-            built_executable = build / "Release" / executable_name
-        if cls.language != "go":
-            shutil.copy2(built_executable, cls.executable)
+    def test_version_and_capabilities(self):
+        from external_cli import configuration
+        self.assertEqual(self.invoke(["--version"]), {"protocol": 1, "version": configuration(ROOT)["version"]})
+        value = self.invoke(["capabilities"])
+        self.assertEqual(value["formats"], ["png", "svg", "pdf"])
+        self.assertFalse(value["fidelity"]["classic_oracle_validated"])
+        self.assertFalse(value["quicktime_separate_matte"])
+        self.assertFalse(value["outline_fonts"]["nonzero_linejustify"])
 
-    def assert_result(self, arguments, status, stdout, stderr):
-        result = subprocess.run(
-            [os.fspath(self.executable), *arguments], capture_output=True, timeout=10
-        )
-        self.assertEqual(result.returncode, status)
-        self.assertEqual(result.stdout, stdout)
-        self.assertEqual(result.stderr, stderr)
+    def test_outputs_warning_hashes_and_explicit_vector_policy(self):
+        original = self.input.read_bytes()
+        for format, policy in (("png", None), ("svg", "preserve"), ("pdf", "preserve"),
+                               ("svg", "raster"), ("pdf", "raster")):
+            with self.subTest(format=format, policy=policy):
+                output = self.folder / (f"{policy} 日本語 ' ; & output.{format}")
+                args = ["convert", "--input", self.input, "--output", output]
+                if policy:
+                    args += ["--vector-policy", policy]
+                value = self.invoke(args)
+                self.assertEqual(value["sha256"], hashlib.sha256(output.read_bytes()).hexdigest())
+                self.assertEqual(value["input_sha256"], hashlib.sha256(original).hexdigest())
+                self.assertEqual((value["width"], value["height"]), (8, 8))
+                self.assertIn("unverified_fidelity", [item["code"] for item in value["diagnostics"]])
+        self.assertEqual(self.input.read_bytes(), original)
 
-    def test_version(self):
-        self.assert_result(["--version"], 0, b'{"protocol":1,"version":"0.1.0"}\n', b"")
+    def test_no_clobber_and_source_alias_protection(self):
+        output = self.folder / "existing.png"
+        output.write_bytes(b"preserve me")
+        self.invoke(["convert", "--input", self.input, "--output", output], 3)
+        self.assertEqual(output.read_bytes(), b"preserve me")
+        value = self.invoke(["convert", "--input", self.input, "--output", self.input,
+                             "--format", "png", "--overwrite"], 3)
+        self.assertEqual(value["error"]["code"], "output_conflict")
+        alias = self.folder / "alias.png"
+        os.link(self.input, alias)
+        self.invoke(["convert", "--input", self.input, "--output", alias, "--overwrite"], 3)
+        self.assertEqual(self.input.read_bytes(), alias.read_bytes())
 
-    def test_name(self):
-        self.assertIn(" ", str(self.executable))
-        name = '😀 "quoted" \\backslash; \'$()\''
-        self.assert_result(
-            ["greet", "--name", name], 0,
-            json_line({"protocol": 1, "message": "Hello, " + name + "!"}), b"",
-        )
+    def test_unsupported_malformed_limits_and_approximation(self):
+        output = self.folder / "out.png"
+        for source, options, code, error in (
+            ("text.pict", [], 5, "unsupported"),
+            ("malformed.pict", [], 4, "malformed"),
+            ("rectangle.pict", ["--max-pixels", "1"], 6, "resource_limit"),
+            ("oval.pict", [], 5, "unsupported"),
+        ):
+            with self.subTest(source=source, options=options):
+                value = self.invoke(["convert", "--input", self.folder / source, "--output", output, *options], code)
+                self.assertEqual(value["error"]["code"], error)
+                self.assertFalse(output.exists())
+        value = self.invoke(["convert", "--input", self.folder / "oval.pict", "--output", output,
+                             "--fidelity", "approximate"])
+        self.assertIn("approximation", [item["code"] for item in value["diagnostics"]])
 
-    def test_names(self):
-        names = [
-            "World", "two words", " ", " leading and trailing ",
-            "世界 café 😀", 'a"b\\c', "line\nbreak", "\t\r\b\f",
-            "".join(chr(value) for value in range(1, 32)),
-            "<>&/\u2028\u2029", "\u007f\u0080\u07ff\u0800\uffff\U0010ffff",
-            "--version", "$(echo not-executed); `echo nope`",
-        ]
-        for name in names:
-            with self.subTest(name=name):
-                self.assert_result(
-                    ["greet", "--name", name], 0,
-                    json_line({"protocol": 1, "message": "Hello, " + name + "!"}), b"",
-                )
-
-    def test_invalid_arguments(self):
-        cases = [
-            [], [""], ["unknown"], ["greet"], ["greet", "--name"],
-            ["greet", "--name", ""], ["greet", "World"],
-            ["greet", "--name=World"], ["greet", "--unknown", "World"],
-            ["greet", "--name", "World", "--name", "Again"],
-            ["greet", "--name", "World", "extra"],
-            ["--name", "World", "greet"], ["greet", "--version"],
-            ["--version", "extra"], ["--version", "--version"],
-            ["greet", "--name", "World", "--version"],
-            ["GREET", "--name", "World"], ["greet", "--Name", "World"],
-        ]
-        for arguments in cases:
-            with self.subTest(arguments=arguments):
-                self.assert_result(arguments, 2, b"", ERROR)
-
-    @unittest.skipUnless(os.name == "posix", "raw byte arguments require POSIX")
-    def test_malformed_utf8(self):
-        malformed = [
-            b"\x80", b"\xff", b"\xc0\xaf", b"\xc1\xbf", b"\xc2",
-            b"\xe2\x82", b"\xe2(\xa1", b"\xe0\x80\x80", b"\xed\xa0\x80",
-            b"\xf0\x80\x80\x80", b"\xf4\x90\x80\x80", b"\xf5\x80\x80\x80",
-            b"\xf8\x88\x80\x80\x80", b"valid\xfe",
-        ]
-        for value in malformed:
-            for arguments in (
-                [b"greet", b"--name", value],
-                [value, b"--name", b"World"],
-                [b"greet", value, b"World"],
-                [b"--version", value],
-            ):
-                with self.subTest(arguments=arguments):
-                    self.assert_result(arguments, 2, b"", ERROR)
-
-
-class GoCLI(ContractTests, unittest.TestCase):
-    language = "go"
-    tools = ("go",)
-
-
-class RustCLI(ContractTests, unittest.TestCase):
-    language = "rust"
-    tools = ("cargo", "rustc")
-
-
-class CppCLI(ContractTests, unittest.TestCase):
-    language = "cpp"
-    tools = ("cmake",)
+    def test_options_and_literal_paths(self):
+        name = 'space 日本語 " quote \\ slash.pict' if os.name != "nt" else "space 日本語.pict"
+        source = self.folder / name
+        shutil.copyfile(self.input, source)
+        inspected = self.invoke(["inspect", "--input", source, "--container", "raw", "--data-fork"])
+        self.assertEqual(inspected["inspection"]["pict_version"], 1)
+        inventory = self.invoke(["list-pictures", "--input", source, "--container", "raw"])
+        self.assertEqual(len(inventory["inventory"]["pictures"]), 1)
+        value = self.invoke(["convert", "--input", source, "--output", self.folder / "options.png",
+                             "--container", "raw", "--width", "16", "--height", "24", "--dpi", "144",
+                             "--background", "112233", "--highlight", "abcdef",
+                             "--font-map", self.folder / "font-map.json",
+                             "--max-input-bytes", "67108864", "--max-pixels", "16000000",
+                             "--max-decoded-bytes", "134217728", "--max-operations", "100000",
+                             "--max-work", "100000000", "--printer-comments", "ignore"])
+        self.assertEqual((value["width"], value["height"], value["dpi"]), (16, 24, 144))
+        self.invoke(["inspect", "--input", source, "--resource-id", "1", "--data-fork"], 2)
 
 
 if __name__ == "__main__":

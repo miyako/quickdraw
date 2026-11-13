@@ -64,22 +64,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: actions/setup-go@v5
-        if: matrix.language == 'go'
-        with:
-          go-version: '1.26.10'
-          cache: false
-      - name: Set up Rust 1.99.1 only when selected
-        if: matrix.language == 'rust'
-        run: rustup toolchain install 1.99.1 --profile minimal
-      - name: Select Rust 1.99.1
-        if: matrix.language == 'rust'
-        run: rustup default 1.99.1
-      - name: Selected CLI contract tests
-        run: python -m unittest discover -s tests -p test_cli.py -v
-      - name: Native build and protocol smoke tests
+      - name: Verify pinned upstream asset and run native protocol smoke tests
         run: python scripts/build_cli.py --target "$CLI_TARGET" --language "$CLI_LANGUAGE"
         shell: bash
+      - name: Selected CLI contract tests
+        run: python -m unittest discover -s tests -p test_cli.py -v
       - uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.target }}
@@ -113,7 +102,7 @@ jobs:
         with:
           name: cli-windows-x64
           path: build/windows-x64
-      - name: Assemble universal macOS and x64 Windows resources
+      - name: Copy verified signed universal macOS and x64 Windows resources without modification
         id: assemble
         run: python scripts/ci_config.py assemble
       - uses: actions/upload-artifact@v4

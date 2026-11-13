@@ -144,6 +144,9 @@ def package(root=ROOT, *, repository=None, tag=None, language=None):
     if component.is_symlink() or component.parent.is_symlink():
         raise ValueError("component directories must not be symlinks")
     validate_resources(component, config["cli"])
+    if config.get("cli_source") == "external-quickdraw-v1":
+        from external_cli import verify_resources
+        verify_resources(root, component)
     if config["language"] in RUNTIME_NOTICES:
         notice = component / "Resources/licenses" / RUNTIME_NOTICES[config["language"]]
         if not notice.is_file() or notice.is_symlink() or not notice.read_bytes().strip():

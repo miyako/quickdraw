@@ -1,7 +1,11 @@
 # _CLI (internal convention)
 
+`resolve()` returns `{ok:true,file:4D.File}` for the validated bundled resource,
+or the same prelaunch error envelope as `execute()`. It never starts a process.
+The feature class uses this to verify the external executable hash before launch. (internal convention)
+
 `cs._CLI.new(executableName : Text; target : Text)` is the reusable bundled
-executable resolver. The host can technically access `cs.TemplateCLI._CLI`;
+executable resolver. The host can technically access `cs.QuickDraw._CLI`;
 underscore naming is not true private access in 4D.
 
 This resolves a standalone CLI for separate-process execution, not a native
@@ -16,7 +20,7 @@ shell, download, copied PDF algorithm or queue.
 
 macOS default/`macOS-universal` uses the two-slice executable. Windows requires
 explicit `Windows-x64`. Unknown selection or OS returns an explicit error;
-Windows ARM64 native execution is not implemented. See [Greeting](Greeting.md)
+Windows ARM64 native execution is not implemented. See [Converter](Converter.md)
 for the common result/error shape.
 
 The read-only `compiled` Boolean evaluates `Is compiled mode` inside the

@@ -19,6 +19,8 @@ import rename_feature
 
 class BumpReleaseTests(unittest.TestCase):
     def setUp(self):
+        if json.loads((ROOT / "template.json").read_text())["initialized"]:
+            self.skipTest("fresh-template language adoption fixtures; external version tests cover this component")
         self.root = ROOT / (".bump-release-test-" + uuid.uuid4().hex)
         self.root.mkdir()
         self.addCleanup(shutil.rmtree, self.root)

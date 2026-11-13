@@ -58,28 +58,56 @@ def accept(root, repository, tool4d, cross=False):
         native = native_target()
         def run(arguments):
             environment = os.environ.copy()
-            environment["TEST_CLI_LANGUAGE"] = config["language"]
+            environment["TEST_CLI_LANGUAGE"] = "none" if config.get("cli_source") else config["language"]
+            if config.get("cli_source") == "external-quickdraw-v1":
+                environment["TOOL4D_BINDING_TEST"] = str(Path(tool4d).resolve())
             subprocess.run(arguments, cwd=root, env=environment, check=True, timeout=900)
         step("unit", lambda: run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"]))
         step("icons", lambda: run([sys.executable, "scripts/generate_icons.py", "--check"]))
         targets = TARGETS if cross else (native,)
+        if config.get("cli_source") == "external-quickdraw-v1":
+            if cross:
+                raise ValueError("external signed CLI assets cannot be cross-built or reassembled with lipo")
+            from external_cli import install
+            for target in TARGETS:
+                if target != native:
+                    step("cli_build_" + target, lambda target=target: install(root, target, test=False))
         for target in targets:
             step("cli_build_" + target, lambda target=target: build(root, target, cross=cross))
             report["steps"]["cli_test_" + target] = (
                 {"status": "passed"} if target == native else
                 {"status": "not_run", "reason": "cross-built only; not executed on its native OS"})
             save()
-        if native == "macos-arm64" and "macos-x64" in targets:
+        if config.get("cli_source") == "external-quickdraw-v1":
+            from build_provenance import verify
+            from external_cli import configuration as asset_configuration
+            report["upstream"] = asset_configuration(root)
+            for target in TARGETS:
+                executable = root / "build" / target / (config["cli"] + (
+                    ".exe" if target == "windows-x64" else ""))
+                report["steps"]["cli_build_" + target]["details"] = verify(root, target, executable)
+            environment = os.environ.copy()
+            environment["TEST_CLI_LANGUAGE"] = config["language"]
+            step("cli_test_" + native, lambda: subprocess.run(
+                [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_cli.py", "-v"],
+                cwd=root, env=environment, check=True, timeout=180))
+        if native == "macos-arm64" and (
+                "macos-x64" in targets or config.get("cli_source") == "external-quickdraw-v1"):
             probe = subprocess.run(["arch", "-x86_64", "/usr/bin/true"], capture_output=True)
             if probe.returncode == 0:
                 step("cli_rosetta", lambda: smoke_test(root / "build/macos-x64" / config["cli"],
-                     config["version"], root / "tests/cli-contract.json", prefix=("arch", "-x86_64")))
+                     report.get("upstream", {}).get("version", config["version"]),
+                     root / "tests/cli-contract.json", prefix=("arch", "-x86_64")))
             else:
                 report["steps"]["cli_rosetta"]["reason"] = "Rosetta unavailable: " + probe.stderr.decode("utf-8", errors="replace")
         # Existing manifests are accepted only when bound to current source and commit.
         step("assembly", lambda: assemble(root))
         component = root / "component" / config["repository"]
         validate_resources(component, config["cli"])
+        if config.get("cli_source") == "external-quickdraw-v1":
+            from external_cli import verify_signature
+            step("upstream_cli_signature", lambda: verify_signature(
+                component / "Resources/bin/macOS" / config["cli"]))
         def dependencies():
             result = subprocess.run(["otool", "-L", str(component / "Resources/bin/macOS" / config["cli"])],
                                     capture_output=True, text=True, check=True)

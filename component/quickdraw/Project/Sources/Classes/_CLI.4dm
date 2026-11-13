@@ -9,13 +9,19 @@ Function get compiled()->$compiled : Boolean
 	$compiled:=Is compiled mode
 
 Function execute($arguments : Collection)->$result : Object
+	If ($arguments=Null)
+		return New object("ok"; False; "error"; New object("code"; "invalid_argument"; "message"; "Arguments collection is required"))
+	End if
+	$result:=This.resolve()
+	If ($result.ok)
+		$result:=cs._Process.new().execute($result.file; $arguments)
+	End if
+
+Function resolve()->$result : Object
 	var $platform; $name : Text
 	var $file : 4D.File
 	If (Not(Match regex("^[a-z][a-z0-9-]{0,62}$"; This.executableName)))
 		return New object("ok"; False; "error"; New object("code"; "invalid_argument"; "message"; "Executable name must be a CLI basename, not a path"))
-	End if
-	If ($arguments=Null)
-		return New object("ok"; False; "error"; New object("code"; "invalid_argument"; "message"; "Arguments collection is required"))
 	End if
 	$name:=This.executableName
 	Case of
@@ -38,4 +44,4 @@ Function execute($arguments : Collection)->$result : Object
 		return New object("ok"; False; "error"; New object("code"; "missing_executable"; "message"; $file.path))
 	End if
 	$file:=File($file.platformPath; fk platform path)
-	$result:=cs._Process.new().execute($file; $arguments)
+	$result:=New object("ok"; True; "file"; $file)

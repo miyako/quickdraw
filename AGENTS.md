@@ -1,5 +1,12 @@
 # 4D CLI component: THINK / ASK → RUN playbook
 
+This initialized destination uses the bounded `external-quickdraw-v1` adapter:
+`cli/asset-lock.json` pins independently released Rust executables. Follow the
+root README and Converter documentation for this adaptation. Do not recreate a
+Rust starter, compile a second CLI, lipo/re-sign the signed universal executable,
+or couple the upstream CLI version to the component version. All source/compiled
+host, package, native CI, provenance and publication gates below still apply.
+
 This is the canonical implementation and acceptance guide. Read `README.md`,
 `template.json`, this file, class documentation, relevant scripts and host tests
 before editing. This is a **real 4D component**, not a native 4D plug-in: its
