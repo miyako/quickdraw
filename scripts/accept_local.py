@@ -59,6 +59,8 @@ def accept(root, repository, tool4d, cross=False):
         def run(arguments):
             environment = os.environ.copy()
             environment["TEST_CLI_LANGUAGE"] = "none" if config.get("cli_source") else config["language"]
+            if config.get("cli_source") == "external-quickdraw-v1":
+                environment["TOOL4D_BINDING_TEST"] = str(Path(tool4d).resolve())
             subprocess.run(arguments, cwd=root, env=environment, check=True, timeout=900)
         step("unit", lambda: run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"]))
         step("icons", lambda: run([sys.executable, "scripts/generate_icons.py", "--check"]))

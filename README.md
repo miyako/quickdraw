@@ -93,6 +93,12 @@ python3 scripts/accept_local.py --root . --repository miyako/quickdraw \
   --tool4d .tools/tool4d.app/Contents/MacOS/tool4d
 ```
 
+`TOOL4D_BINDING_TEST=.tools/tool4d.app/Contents/MacOS/tool4d python3 -m unittest discover -s tests -p test_binding_runtime.py -v`
+runs isolated real 4D argument/protocol unit tests and a real macOS
+SystemWorker timeout probe using `/bin/sleep`. It launches no substitute
+converter and is not native CLI or final-package acceptance. Local acceptance
+includes this check; its report is `build/binding-unit-status.json`.
+
 Choose the actual native target for the import/test command. Local acceptance
 imports all pinned assets, but foreign native execution remains `not_run`.
 `--cross` is not supported for this adapter. Free pinned tool4d 20.7/101905
