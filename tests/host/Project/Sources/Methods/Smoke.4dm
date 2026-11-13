@@ -2,6 +2,7 @@
 var $ignored : Integer
 var $parameter; $name; $target; $folderPath; $format; $policy : Text
 var $inputHash : Text
+var $bytes : Blob
 var $request; $result; $report; $options : Object
 var $tool : cs.QuickDraw.Converter
 var $requestFile; $statusFile; $renamedExecutable; $input; $output : 4D.File
@@ -36,7 +37,8 @@ End if
 $tool:=cs.QuickDraw.Converter.new($target)
 $fixtures:=$requestFile.parent.folder("Resources")
 $input:=$fixtures.file("rectangle.pict")
-$inputHash:=Lowercase(Generate digest($input.getContent(); SHA256 digest))
+$bytes:=$input.getContent()
+$inputHash:=Lowercase(Generate digest($bytes; SHA256 digest))
 $report:=New object("success"; True; "finished"; False; "cases"; New collection)
 $report.outputChecks:=New collection
 $report.compiled:=$tool._cli.compiled
@@ -52,7 +54,8 @@ For each ($name; New collection("png"; "svg-preserve"; "pdf-preserve"; "svg-rast
 	$result:=$tool.convert($input; $output; $options)
 	$report.cases.push($result)
 	If ($result.ok)
-		$report.outputChecks.push(Lowercase(Generate digest($output.getContent(); SHA256 digest))=$result.value.sha256)
+		$bytes:=$output.getContent()
+		$report.outputChecks.push(Lowercase(Generate digest($bytes; SHA256 digest))=$result.value.sha256)
 	Else
 		$report.outputChecks.push(False)
 	End if
@@ -129,8 +132,10 @@ $folderPath:=$requestFile.parent.path
 If (Is Windows)
 	$folderPath:=$requestFile.parent.platformPath
 End if
-$report.folderRoundTrip:=Position($folderPath; $report.folderArgument.stderr; *)>0
-$report.inputPreserved:=Lowercase(Generate digest($input.getContent(); SHA256 digest))=$inputHash
+$name:=JSON Parse($report.folderArgument.stderr).error.message
+$report.folderRoundTrip:=Position($folderPath; $name; *)>0
+$bytes:=$input.getContent()
+$report.inputPreserved:=Lowercase(Generate digest($bytes; SHA256 digest))=$inputHash
 $report.finished:=True
 ON ERR CALL(HOST_PreviousHandler; ek local)
 $statusFile.setText(JSON Stringify($report))

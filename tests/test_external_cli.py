@@ -76,7 +76,7 @@ class AssetTests(unittest.TestCase):
     def test_identity_mismatch_and_unsigned_are_not_accepted(self):
         for field, value in (("source_revision", "b" * 40), ("protocol", True),
                              ("target", "aarch64-apple-darwin"), ("architecture", "arm64"),
-                             ("version", "0.2.0"), ("signed", False)):
+                             ("version", "0.2.0"), ("signed", False), ("notarized", False)):
             before = copy.deepcopy(self.manifest)
             self.manifest[field] = value
             self.write_archive()

@@ -79,22 +79,35 @@ def accept(root, repository, tool4d, cross=False):
                 {"status": "not_run", "reason": "cross-built only; not executed on its native OS"})
             save()
         if config.get("cli_source") == "external-quickdraw-v1":
+            from build_provenance import verify
+            from external_cli import configuration as asset_configuration
+            report["upstream"] = asset_configuration(root)
+            for target in TARGETS:
+                executable = root / "build" / target / (config["cli"] + (
+                    ".exe" if target == "windows-x64" else ""))
+                report["steps"]["cli_build_" + target]["details"] = verify(root, target, executable)
             environment = os.environ.copy()
             environment["TEST_CLI_LANGUAGE"] = config["language"]
             step("cli_test_" + native, lambda: subprocess.run(
                 [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_cli.py", "-v"],
                 cwd=root, env=environment, check=True, timeout=180))
-        if native == "macos-arm64" and "macos-x64" in targets:
+        if native == "macos-arm64" and (
+                "macos-x64" in targets or config.get("cli_source") == "external-quickdraw-v1"):
             probe = subprocess.run(["arch", "-x86_64", "/usr/bin/true"], capture_output=True)
             if probe.returncode == 0:
                 step("cli_rosetta", lambda: smoke_test(root / "build/macos-x64" / config["cli"],
-                     config["version"], root / "tests/cli-contract.json", prefix=("arch", "-x86_64")))
+                     report.get("upstream", {}).get("version", config["version"]),
+                     root / "tests/cli-contract.json", prefix=("arch", "-x86_64")))
             else:
                 report["steps"]["cli_rosetta"]["reason"] = "Rosetta unavailable: " + probe.stderr.decode("utf-8", errors="replace")
         # Existing manifests are accepted only when bound to current source and commit.
         step("assembly", lambda: assemble(root))
         component = root / "component" / config["repository"]
         validate_resources(component, config["cli"])
+        if config.get("cli_source") == "external-quickdraw-v1":
+            from external_cli import verify_signature
+            step("upstream_cli_signature", lambda: verify_signature(
+                component / "Resources/bin/macOS" / config["cli"]))
         def dependencies():
             result = subprocess.run(["otool", "-L", str(component / "Resources/bin/macOS" / config["cli"])],
                                     capture_output=True, text=True, check=True)

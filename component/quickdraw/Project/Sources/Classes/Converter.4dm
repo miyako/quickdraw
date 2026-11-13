@@ -64,6 +64,7 @@ Function _invoke($arguments : Collection; $command : Text)->$result : Object
 
 Function _checkAsset($binary : 4D.File; $metadata : 4D.File)->$result : Object
 	var $lock; $entry : Variant
+	var $bytes : Blob
 	var $previous; $digest; $platform : Text
 	var $errors : Collection
 	var CLI_LastErrors : Collection
@@ -75,7 +76,8 @@ Function _checkAsset($binary : 4D.File; $metadata : 4D.File)->$result : Object
 	CLI_LastErrors:=Null
 	ON ERR CALL("_CaptureError"; ek local)
 	$lock:=JSON Parse($metadata.getText())
-	$digest:=Lowercase(Generate digest($binary.getContent(); SHA256 digest))
+	$bytes:=$binary.getContent()
+	$digest:=Lowercase(Generate digest($bytes; SHA256 digest))
 	ON ERR CALL($previous; ek local)
 	$errors:=CLI_LastErrors
 	CLI_LastErrors:=Null

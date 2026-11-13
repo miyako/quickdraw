@@ -173,8 +173,8 @@ def _verify_archive(archive, lock, platform):
         if any(type(manifest.get(key)) is not type(value) or manifest.get(key) != value
                for key, value in expected.items()):
             raise ValueError("CLI manifest identity/provenance mismatch")
-        if platform == "macos" and manifest.get("signed") is not True:
-            raise ValueError("signed universal macOS release required")
+        if platform == "macos" and (manifest.get("signed") is not True or manifest.get("notarized") is not True):
+            raise ValueError("signed and notarized universal macOS release required")
         inventory = manifest.get("files")
         if not isinstance(inventory, dict) or set(inventory) != set(files) - {"manifest.json"}:
             raise ValueError("CLI manifest must inventory every regular member")
@@ -251,7 +251,7 @@ def acquire(root, platform):
 
 
 def verify_signature(binary):
-    subprocess.run(["codesign", "--verify", "--strict", "--all-architectures", "--verbose=2", str(binary)],
+    subprocess.run(["codesign", "--verify", "--strict", "--all-architectures", "--check-notarization", "--verbose=2", str(binary)],
                    check=True, capture_output=True, timeout=60)
     detail = subprocess.run(["codesign", "-d", "--verbose=4", str(binary)],
                             check=True, capture_output=True, text=True, timeout=30).stderr

@@ -55,16 +55,20 @@ input/font/source-alias protection, including with explicit `overwrite:true`.
 `cli/asset-lock.json` is the sole upstream pin: exact source commit, independent
 CLI version/tag, canonical release ZIP URLs and SHA256 digests for each ZIP,
 manifest and executable. No expiring Actions artifact URL is a distribution pin.
-**Until verified published pins are populated, acquisition fails explicitly.**
-The initial development CI baseline is not accepted as a signed release.
+The current pin is public
+[quickdraw-cli v0.1.0](https://github.com/miyako/quickdraw-cli/releases/tag/v0.1.0),
+source `1e8c458fa0b96888e16fcb00243e0aa19dd6376a`. The initial development CI
+baseline is not accepted as a signed release.
 
 The bounded `external-quickdraw-v1` adapter validates archive/member paths,
 duplicates, file types, size budgets, complete inventories, every member hash,
 source revision, protocol and Mach-O/PE executable architecture before extraction.
 It carries all upstream licenses, runtime/dependency notices, Cargo.lock and
 contract docs under `Resources/licenses/quickdraw-cli/{macos,windows}/`.
-The macOS executable is a verified Developer ID-signed universal binary copied
-byte-for-byte: **no lipo or re-signing**. Windows is x64, not ARM64.
+The macOS executable is a verified Developer ID-signed, notarized universal binary copied
+byte-for-byte: **no lipo or re-signing**. Online notarization-ticket verification
+is required during macOS import/assembly; the bare executable/ZIP is not stapled.
+Windows is x64, not ARM64; no Authenticode signature is claimed.
 Runtime calls check the selected executable hash against packaged provenance,
 and first use probes CLI version/capabilities. Missing/mismatched assets fail;
 there is no runtime download or alternative executable/revision.
@@ -101,6 +105,10 @@ includes this check; its report is `build/binding-unit-status.json`.
 
 Choose the actual native target for the import/test command. Local acceptance
 imports all pinned assets, but foreign native execution remains `not_run`.
+Available Rosetta CLI contract checks are recorded separately as translated
+execution, never native Intel evidence. The acceptance JSON retains the upstream
+lock and all three import manifests; `upstream_cli_signature` verifies the
+embedded executable, independently of the unsigned component's `signing` status.
 `--cross` is not supported for this adapter. Free pinned tool4d 20.7/101905
 compiles the component on Apple Silicon without license activation or credentials.
 The final ZIP is source-stripped and tested after unpacking through a real host;

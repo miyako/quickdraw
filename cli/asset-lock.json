@@ -2,7 +2,22 @@
   "schema": 1,
   "repository": "miyako/quickdraw-cli",
   "version": "0.1.0",
-  "tag": null,
-  "source_revision": null,
-  "assets": {}
+  "tag": "v0.1.0",
+  "source_revision": "1e8c458fa0b96888e16fcb00243e0aa19dd6376a",
+  "assets": {
+    "macos": {
+      "url": "https://github.com/miyako/quickdraw-cli/releases/download/v0.1.0/quickdraw-v0.1.0-universal-apple-darwin.zip",
+      "target": "universal-apple-darwin",
+      "sha256": "7975f4c4bb342c3c66b83ac14fbd4ce46fab74ca46e4c37aaa3c669596919ef7",
+      "manifest_sha256": "2af70ef1ba83239730b169d9decbcb26ddaf8fdad9c97cd0964e4685d65688f4",
+      "binary_sha256": "6ddede206e106547bedbfb604ebf10eed3f70eec3808504920710dbb623673c3"
+    },
+    "windows": {
+      "url": "https://github.com/miyako/quickdraw-cli/releases/download/v0.1.0/quickdraw-v0.1.0-x86_64-pc-windows-msvc.zip",
+      "target": "x86_64-pc-windows-msvc",
+      "sha256": "26efac511eedc9a01e08d1a95e724682e9f9f294577bb7644cb4c6704e35a3fd",
+      "manifest_sha256": "bb2191b1ad34314d05da889fdcd358fe688f11bde2f566774fbaad61abbcf9f6",
+      "binary_sha256": "ee0136592e1301d83c7ac720f521dad54402ace3b08ed0b9e18852dd1ed491cd"
+    }
+  }
 }
