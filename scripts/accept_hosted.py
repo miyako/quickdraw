@@ -49,6 +49,8 @@ def accept(root, repository, tool4d, tag=None, require_apple_signing=False):
     save()
     try:
         config = load_config(root, initialized=True, repository=repository, tag=tag)
+        if config.get("cli_source") == "external-quickdraw-v1" and require_apple_signing:
+            raise ValueError("component re-signing of the pinned external CLI is not supported; preserve upstream signatures")
         report["configuration"] = config
         require_tool4d_host()
         tool = Path(tool4d).resolve()

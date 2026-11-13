@@ -18,7 +18,8 @@ CONTRACT = json.loads((ROOT / "tests/host/contract.json").read_text(encoding="ut
 
 def valid_status(compiled=False):
     status = {"success": True, "finished": True, "compiled": compiled,
-              "cases": [{"ok": True, **copy.deepcopy(case)} for case in CONTRACT["feature"]["cases"]],
+              "cases": [{"ok": True, "stdout": "fixture\n", "stderr": "", "exitCode": 0, "value": {}}
+                        for _ in range(CONTRACT["feature"]["caseCount"])],
               "fileArgument": {"ok": True, "stdout": "file round trip", "stderr": "", "exitCode": 0},
               "folderArgument": {"ok": True, "stdout": "folder round trip", "stderr": "", "exitCode": 0}}
     def apply_assertions(value, assertions):
@@ -34,12 +35,18 @@ def valid_status(compiled=False):
             key = int(tokens[-1]) if isinstance(destination, list) else tokens[-1]
             if "equals" in assertion:
                 destination[key] = copy.deepcopy(assertion["equals"])
+            if "matches" in assertion:
+                destination[key] = "a" * 64 if "{64}" in assertion["matches"] else "fixture"
             if "length" in assertion:
                 destination[key] = [{} for _ in range(assertion["length"])]
             if "each" in assertion:
-                destination[key] = [apply_assertions(entry, assertion["each"]) for entry in destination[key]]
+                destination[key] = [apply_assertions(entry, assertion["each"])
+                                    for entry in destination.get(key, [{}])]
         return value
 
+    for path in CONTRACT["execution"]["successPaths"]:
+        status[path.removeprefix("/")] = {"ok": True, "stdout": "fixture\n", "stderr": "", "exitCode": 0}
+    status["cases"] = [apply_assertions(case, CONTRACT["feature"]["caseAssertions"]) for case in status["cases"]]
     for section in ("feature", "execution"):
         status = apply_assertions(status, CONTRACT[section]["assertions"])
     assertions = {entry["path"]: entry for entry in CONTRACT["execution"]["assertions"]}
@@ -186,7 +193,7 @@ class ContractTests(unittest.TestCase):
         status = valid_status()
         status["fileArgument"]["stderr"] = "diagnostic, not a failure"
         runner.validate_status(status, CONTRACT, False)
-        status["folderArgument"]["error"] = {"code": "hidden_failure"}
+        status["fileArgument"]["error"] = {"code": "hidden_failure"}
         with self.assertRaises(ValueError):
             runner.validate_status(status, CONTRACT, False)
 
@@ -210,7 +217,7 @@ class ContractTests(unittest.TestCase):
                 lambda c: c["feature"].update(cases=[]),
                 lambda c: c["feature"].update(assertions=[]),
                 lambda c: c["execution"].update(assertions=[]),
-                lambda c: c["feature"]["cases"][0].pop("value"),
+                lambda c: c["feature"].update(caseAssertions=[]),
                 lambda c: c["execution"].update(successPaths=None),
                 lambda c: c["execution"]["assertions"].append({"path": "/success", "equal": True})):
             contract = copy.deepcopy(CONTRACT)

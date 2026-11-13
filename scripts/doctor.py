@@ -36,13 +36,21 @@ def doctor(root=ROOT, tool4d=None):
         check("native_cli_host", True, report["native_target"])
     except ValueError as error:
         check("native_cli_host", False, str(error))
-    tools = {"go": ("go",), "rust": ("cargo", "rustc"), "cpp": ("cmake",)}.get(config["language"], ())
+    external = config.get("cli_source") == "external-quickdraw-v1"
+    tools = () if external else {"go": ("go",), "rust": ("cargo", "rustc"), "cpp": ("cmake",)}.get(config["language"], ())
     for tool in tools:
         location = shutil.which(tool)
         check(tool, location is not None, location or "missing selected toolchain")
     if config["initialized"]:
         source = Path(root) / "cli"
         check("cli_source", source.is_dir() and not source.is_symlink(), str(source))
+        if external:
+            from external_cli import configuration
+            try:
+                lock = configuration(root)
+                check("external_cli_release", True, lock["repository"] + "@" + lock["source_revision"])
+            except ValueError as error:
+                check("external_cli_release", False, str(error))
         compiler = Path(root) / "tooling/compiler/Project/compiler.4DProject"
         check("compiler_driver", compiler.is_file(), str(compiler))
     report["artifacts"] = [

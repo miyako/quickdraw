@@ -1,0 +1,234 @@
+{
+	"_method_": {},
+	"cs.QuickDraw": {
+		"_CLI": {
+			"new()": {
+				"Syntax": "**.new**( *executableName* : Text; *target* : Text )",
+				"Params": [
+					[
+						"executableName",
+						"Text",
+						"->"
+					],
+					[
+						"target",
+						"Text",
+						"->"
+					]
+				],
+				"Summary": ""
+			}
+		},
+		"Converter": {
+			"new()": {
+				"Syntax": "**.new**( *target* : Text )",
+				"Params": [
+					[
+						"target",
+						"Text",
+						"->"
+					]
+				],
+				"Summary": ""
+			}
+		}
+	},
+	"_CLI": {
+		"resolve()": {
+			"Syntax": "**.resolve**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"execute()": {
+			"Syntax": "**.execute**( *arguments* : Collection )->result : Object",
+			"Params": [
+				[
+					"arguments",
+					"Collection",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"get compiled()": {
+			"Syntax": "**.get compiled**()->compiled : Boolean",
+			"Params": [
+				[
+					"compiled",
+					"Boolean",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"target": {
+			"Syntax": "target : Text"
+		},
+		"executableName": {
+			"Syntax": "executableName : Text"
+		}
+	},
+	"Converter": {
+		"convert()": {
+			"Syntax": "**.convert**( *input* : Variant; *output* : Variant; *options* : Variant )->result : Object",
+			"Params": [
+				[
+					"input",
+					"Variant",
+					"->"
+				],
+				[
+					"output",
+					"Variant",
+					"->"
+				],
+				[
+					"options",
+					"Variant",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"listPictures()": {
+			"Syntax": "**.listPictures**( *input* : Variant; *options* : Variant )->result : Object",
+			"Params": [
+				[
+					"input",
+					"Variant",
+					"->"
+				],
+				[
+					"options",
+					"Variant",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"listFonts()": {
+			"Syntax": "**.listFonts**( *input* : Variant; *options* : Variant )->result : Object",
+			"Params": [
+				[
+					"input",
+					"Variant",
+					"->"
+				],
+				[
+					"options",
+					"Variant",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"inspect()": {
+			"Syntax": "**.inspect**( *input* : Variant; *options* : Variant )->result : Object",
+			"Params": [
+				[
+					"input",
+					"Variant",
+					"->"
+				],
+				[
+					"options",
+					"Variant",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"capabilities()": {
+			"Syntax": "**.capabilities**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"version()": {
+			"Syntax": "**.version**()->result : Object",
+			"Params": [
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		}
+	},
+	"_Process": {
+		"execute()": {
+			"Syntax": "**.execute**( *file* : 4D.File; *arguments* : Collection )->result : Object",
+			"Params": [
+				[
+					"file",
+					"4D.File",
+					"->"
+				],
+				[
+					"arguments",
+					"Collection",
+					"->"
+				],
+				[
+					"result",
+					"Object",
+					"<-"
+				]
+			],
+			"Summary": ""
+		},
+		"quote()": {
+			"Syntax": "**.quote**( *argument* : Text )->quoted : Text",
+			"Params": [
+				[
+					"argument",
+					"Text",
+					"->"
+				],
+				[
+					"quoted",
+					"Text",
+					"<-"
+				]
+			],
+			"Summary": ""
+		}
+	}
+}

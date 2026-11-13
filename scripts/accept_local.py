@@ -58,17 +58,30 @@ def accept(root, repository, tool4d, cross=False):
         native = native_target()
         def run(arguments):
             environment = os.environ.copy()
-            environment["TEST_CLI_LANGUAGE"] = config["language"]
+            environment["TEST_CLI_LANGUAGE"] = "none" if config.get("cli_source") else config["language"]
             subprocess.run(arguments, cwd=root, env=environment, check=True, timeout=900)
         step("unit", lambda: run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"]))
         step("icons", lambda: run([sys.executable, "scripts/generate_icons.py", "--check"]))
         targets = TARGETS if cross else (native,)
+        if config.get("cli_source") == "external-quickdraw-v1":
+            if cross:
+                raise ValueError("external signed CLI assets cannot be cross-built or reassembled with lipo")
+            from external_cli import install
+            for target in TARGETS:
+                if target != native:
+                    step("cli_build_" + target, lambda target=target: install(root, target, test=False))
         for target in targets:
             step("cli_build_" + target, lambda target=target: build(root, target, cross=cross))
             report["steps"]["cli_test_" + target] = (
                 {"status": "passed"} if target == native else
                 {"status": "not_run", "reason": "cross-built only; not executed on its native OS"})
             save()
+        if config.get("cli_source") == "external-quickdraw-v1":
+            environment = os.environ.copy()
+            environment["TEST_CLI_LANGUAGE"] = config["language"]
+            step("cli_test_" + native, lambda: subprocess.run(
+                [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_cli.py", "-v"],
+                cwd=root, env=environment, check=True, timeout=180))
         if native == "macos-arm64" and "macos-x64" in targets:
             probe = subprocess.run(["arch", "-x86_64", "/usr/bin/true"], capture_output=True)
             if probe.returncode == 0:
