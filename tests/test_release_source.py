@@ -3,6 +3,7 @@ from contextlib import redirect_stderr, redirect_stdout
 import io
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -40,7 +41,15 @@ class ReleaseSourceTests(unittest.TestCase):
         for name in ("template.json", "package.json", "README.md", "release-policy.json",
                      "workflow-contract.json", "tests/test_cli.py", "tests/cli-contract.json"):
             shutil.copy2(ROOT / name, self.root / name)
-        self.environment = patch.dict(os.environ, {"GITHUB_REPOSITORY": self.repository})
+        # Expectations below assume a 0.1.0 baseline; pin the fixture so a source bump does not break them.
+        for name in ("template.json", "package.json"):
+            path = self.root / name
+            text = path.read_text(encoding="utf-8")
+            pinned = re.sub(r'^(  "version": )"[^"]*"', r'\1"0.1.0"', text, count=1, flags=re.M)
+            if pinned == text and '"version": "0.1.0"' not in text:
+                raise AssertionError("could not pin fixture version in " + name)
+            path.write_text(pinned, encoding="utf-8")
+        self.environment =patch.dict(os.environ, {"GITHUB_REPOSITORY": self.repository})
         self.environment.start()
         self.addCleanup(self.environment.stop)
         self.availability_patch = patch.object(release_source, "available")
