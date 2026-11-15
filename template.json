@@ -7,6 +7,6 @@
   "language": "rust",
   "cli_source": "external-quickdraw-v1",
   "feature": "QuickDraw PICT conversion and inspection using verified external quickdraw-cli assets",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "feature_class": "Converter"
 }
