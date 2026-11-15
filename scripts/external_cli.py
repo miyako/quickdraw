@@ -315,6 +315,8 @@ def assemble(root):
         shutil.copytree(unpacked, notice, ignore=shutil.ignore_patterns("bin"))
     verify_signature(resources / "bin/macOS/quickdraw")
     safe_destination(resources / "quickdraw-assets.json").write_text(json.dumps(lock, indent=2) + "\n")
+    from generate_icons import generate as copy_icons
+    copy_icons(root)  # logo.png/logo.svg from assets/ into the same Resources folder
     return resources / "bin"
 
 

@@ -842,10 +842,13 @@ cross-build or optional skipped workflow as passed.
 
 ## 8. Icons, licensing and optional signing
 
-Edit original `assets/icon-source.svg` within the supported rectangle/polygon
-renderer; regenerate **both** Resources icons. `logo.png` is real RGBA PNG and
-`logo.svg` embeds its byte-identical PNG data URI: **PNG-in-SVG**, not the reverse.
-For arbitrary artwork use a pinned real SVG rasterizer. Never rename SVG to PNG.
+The logo artwork lives in `assets/logo.png` and `assets/logo.svg`; replace both
+together. `logo.png` is a real 1024x1024 8-bit RGBA PNG (ancillary chunks such as
+`sRGB`/`eXIf` are allowed) and `logo.svg` is a 64x64 SVG with one `<image>` whose
+data URI is the byte-identical PNG: **PNG-in-SVG**, not the reverse. Never rename
+SVG to PNG. `scripts/generate_icons.py` validates both and copies them into the
+component's `Resources/`; `ci_config.py assemble` runs the same copy during the
+build, and `--check` fails CI when the committed Resources copies are stale.
 
 The scaffold is MIT; retain its copyright/license. Review all bundled tools,
 static libraries and language runtimes separately and include required notices
