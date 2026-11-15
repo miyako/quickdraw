@@ -309,6 +309,7 @@ def assemble(root):
         destination = safe_destination(resources / "bin" / folder / executables[target].name)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(executables[target], destination)
+        destination.chmod(0o755)  # downloaded CI artifacts lose the executable bit
         notice = safe_destination(resources / "licenses/quickdraw-cli" / platform)
         if notice.exists():
             shutil.rmtree(notice)
